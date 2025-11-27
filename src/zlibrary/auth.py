@@ -130,8 +130,9 @@ class AuthManager:
                 raise AuthenticationException("Login failed with unknown error")
             
             # Step 4: Extract authentication cookies
-            sid = session.cookies.get('sid')
-            user_id = session.cookies.get('user_id')
+            # Z-Library uses different cookie names: remix_userkey and remix_userid
+            sid = session.cookies.get('remix_userkey') or session.cookies.get('sid')
+            user_id = session.cookies.get('remix_userid') or session.cookies.get('user_id')
             
             if not sid or not user_id:
                 self.logger.error(f"Login response did not contain expected cookies. Available cookies: {list(session.cookies.keys())}")
@@ -175,6 +176,9 @@ class AuthManager:
                 
                 # Write cookies in Netscape format
                 # Format: domain	flag	path	secure	expiration	name	value
+                # Write both new (remix_*) and old (sid/user_id) formats for compatibility
+                f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tremix_userkey\t{sid}\n")
+                f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tremix_userid\t{user_id}\n")
                 f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tsid\t{sid}\n")
                 f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tuser_id\t{user_id}\n")
             
@@ -202,8 +206,10 @@ class AuthManager:
         # Save to file
         self.save_cookies_to_file(sid, user_id, cookie_file_path)
         
-        # Return as cookie jar
+        # Return as cookie jar with both cookie name formats
         cookie_jar = RequestsCookieJar()
+        cookie_jar.set('remix_userkey', sid, domain='z-library.sk', path='/')
+        cookie_jar.set('remix_userid', user_id, domain='z-library.sk', path='/')
         cookie_jar.set('sid', sid, domain='z-library.sk', path='/')
         cookie_jar.set('user_id', user_id, domain='z-library.sk', path='/')
         

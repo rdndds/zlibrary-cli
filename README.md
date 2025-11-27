@@ -74,9 +74,11 @@ Get cookies from Z-Library in Netscape format and save to `data/cookies.txt`:
 
 ```
 # Netscape HTTP Cookie File
-.z-library.sk	TRUE	/	FALSE	0	sid	<session_id>
-.z-library.sk	TRUE	/	FALSE	0	user_id	<user_id>
+.z-library.sk	TRUE	/	FALSE	0	remix_userkey	<session_key>
+.z-library.sk	TRUE	/	FALSE	0	remix_userid	<user_id>
 ```
+
+Note: The app also supports older cookie names (`sid` and `user_id`) for backward compatibility.
 
 ## Usage
 
