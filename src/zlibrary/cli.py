@@ -13,13 +13,7 @@ from zlibrary.logging_config import setup_logging, get_logger
 
 def main():
     """Main entry point for Z-Library CLI."""
-    # Initialize configuration and logging
-    config = Config()
-    setup_logging(config)
-    logger = get_logger(__name__)
-    logger.info("Z-Library CLI starting")
-    
-    # Create argument parser
+    # Create argument parser first to get verbose flag
     parser = create_parser()
     
     # Show help if no arguments provided
@@ -29,6 +23,23 @@ def main():
     
     # Parse arguments
     args = parser.parse_args()
+    
+    # Initialize configuration
+    config = Config()
+    
+    # Override log level if verbose flag is set
+    if hasattr(args, 'verbose') and args.verbose:
+        config.set('log_level', 'DEBUG')
+    
+    # Setup logging with potentially updated config
+    setup_logging(config)
+    logger = get_logger(__name__)
+    logger.info("Z-Library CLI starting")
+    
+    if args.verbose:
+        logger.debug("Verbose mode enabled")
+        logger.debug(f"Command: {args.command}")
+        logger.debug(f"Arguments: {vars(args)}")
     
     try:
         # Route command to appropriate handler

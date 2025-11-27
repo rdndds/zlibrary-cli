@@ -93,32 +93,44 @@ class AuthManager:
         try:
             # Step 1: Get initial session cookies
             self.logger.debug(f"Getting initial session from {self.LOGIN_URL}")
-            session.get(self.LOGIN_URL, timeout=30)
+            initial_response = session.get(self.LOGIN_URL, timeout=30)
+            self.logger.debug(f"Initial response status: {initial_response.status_code}")
+            self.logger.debug(f"Initial cookies: {list(session.cookies.keys())}")
             
             # Step 2: Submit login credentials to RPC endpoint
             login_data = {
                 'functionName': 'login',
                 'email': email,
-                'password': password,
+                'password': '***REDACTED***',  # Don't log password
                 'site_mode': 'books',
                 'action': 'login',
                 'redirectUrl': ''
             }
             
             self.logger.debug(f"Submitting credentials to {self.RPC_URL}")
+            self.logger.debug(f"Login data (password redacted): {login_data}")
+            
+            # Actually send with real password
+            login_data['password'] = password
             response = session.post(
                 self.RPC_URL,
                 data=login_data,
                 timeout=30,
                 allow_redirects=True
             )
+            self.logger.debug(f"Login response status: {response.status_code}")
+            self.logger.debug(f"Response cookies: {list(session.cookies.keys())}")
             
             # Step 3: Check for errors in response
             if response.status_code != 200:
+                self.logger.debug(f"Non-200 status code: {response.status_code}")
                 raise AuthenticationException(f"Login failed with status code: {response.status_code}")
             
             response_text = response.text.lower()
+            self.logger.debug(f"Response length: {len(response.text)} bytes")
+            
             if 'incorrect email or password' in response_text:
+                self.logger.debug("Found 'incorrect email or password' in response")
                 raise AuthenticationException("Incorrect email or password")
             
             if 'error' in response_text and 'alert' in response_text:
@@ -126,6 +138,7 @@ class AuthManager:
                 import re
                 match = re.search(r'alert\(["\']([^"\']+)["\']\)', response.text)
                 if match:
+                    self.logger.debug(f"Found error alert: {match.group(1)}")
                     raise AuthenticationException(f"Login failed: {match.group(1)}")
                 raise AuthenticationException("Login failed with unknown error")
             
@@ -134,11 +147,15 @@ class AuthManager:
             sid = session.cookies.get('remix_userkey') or session.cookies.get('sid')
             user_id = session.cookies.get('remix_userid') or session.cookies.get('user_id')
             
+            self.logger.debug(f"Extracted sid: {'***' if sid else 'None'}")
+            self.logger.debug(f"Extracted user_id: {user_id if user_id else 'None'}")
+            
             if not sid or not user_id:
                 self.logger.error(f"Login response did not contain expected cookies. Available cookies: {list(session.cookies.keys())}")
                 raise AuthenticationException("Login failed: authentication cookies not received")
             
             self.logger.info(f"Login successful for user ID: {user_id}")
+            self.logger.debug(f"Session established with {len(session.cookies)} cookies")
             return sid, user_id
             
         except requests.RequestException as e:
@@ -167,6 +184,7 @@ class AuthManager:
         cookie_path.parent.mkdir(parents=True, exist_ok=True)
         
         self.logger.debug(f"Saving cookies to {cookie_file_path}")
+        self.logger.debug(f"Cookie directory: {cookie_path.parent}")
         
         try:
             with open(cookie_file_path, 'w', encoding='utf-8') as f:
@@ -177,12 +195,19 @@ class AuthManager:
                 # Write cookies in Netscape format
                 # Format: domain	flag	path	secure	expiration	name	value
                 # Write both new (remix_*) and old (sid/user_id) formats for compatibility
-                f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tremix_userkey\t{sid}\n")
-                f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tremix_userid\t{user_id}\n")
-                f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tsid\t{sid}\n")
-                f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\tuser_id\t{user_id}\n")
+                cookies_written = [
+                    ('remix_userkey', sid),
+                    ('remix_userid', user_id),
+                    ('sid', sid),
+                    ('user_id', user_id)
+                ]
+                
+                for name, value in cookies_written:
+                    f.write(f".z-library.sk\tTRUE\t/\tFALSE\t0\t{name}\t{value}\n")
+                    self.logger.debug(f"Wrote cookie: {name}")
             
             self.logger.info(f"Cookies saved successfully to {cookie_file_path}")
+            self.logger.debug(f"Saved {len(cookies_written)} cookies")
             
         except Exception as e:
             self.logger.error(f"Error saving cookies to {cookie_file_path}: {str(e)}")

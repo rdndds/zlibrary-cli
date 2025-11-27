@@ -84,6 +84,9 @@ Note: The app also supports older cookie names (`sid` and `user_id`) for backwar
 
 ```bash
 python main.py [command] [options]
+
+# Use -v or --verbose for detailed debug output
+python main.py -v [command] [options]
 ```
 
 ### Login
@@ -97,6 +100,9 @@ python main.py login --email your@email.com --password yourpass
 
 # Save to custom location
 python main.py login --save-to /path/to/cookies.txt
+
+# Verbose mode (shows detailed debug information)
+python main.py -v login
 ```
 
 ### Search
@@ -110,6 +116,9 @@ python main.py search --title "Python Programming" --limit 5
 
 # Export results
 python main.py search "data science" --export json
+
+# Verbose mode for debugging
+python main.py -v search "python"
 ```
 
 ### Download
@@ -123,6 +132,9 @@ python main.py download URL1 URL2 URL3
 
 # From file
 python main.py download --urls-file book_urls.txt
+
+# Verbose mode shows detailed progress
+python main.py -v download https://z-library.sk/book/12345/book-title.html
 ```
 
 ### Account
