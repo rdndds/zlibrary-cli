@@ -37,6 +37,9 @@ class DownloadManager:
         self.http_client = ZLibraryHTTPClient(config, auth_manager)
         self.logger = get_logger(__name__)
         self.terminal_width = self._get_terminal_width()
+        # Track last download stats
+        self.last_download_size = 0
+        self.last_download_time = 0
     
     def _get_terminal_width(self) -> int:
         """Get terminal width, with fallback to 80 columns."""
@@ -219,6 +222,15 @@ class DownloadManager:
         """Convert bytes to MB."""
         return size_bytes / (1024 * 1024)
     
+    def _format_speed(self, bytes_per_second: float) -> str:
+        """Format download speed with appropriate unit."""
+        mbps = bytes_per_second / (1024 * 1024)
+        if mbps >= 1.0:
+            return f"{mbps:.2f} MB/s"
+        else:
+            kbps = bytes_per_second / 1024
+            return f"{kbps:.2f} KB/s"
+    
     def _download_with_progress(
         self,
         response,
@@ -245,6 +257,9 @@ class DownloadManager:
             total_size = int(content_length)
         
         downloaded_size = 0
+        start_time = time.time()
+        last_update_time = start_time
+        last_downloaded = 0
         
         try:
             with open(filepath, 'wb') as f:
@@ -253,11 +268,23 @@ class DownloadManager:
                         f.write(chunk)
                         downloaded_size += len(chunk)
                         
-                        if verbose:
-                            self._show_progress(downloaded_size, total_size)
+                        # Update progress every 0.5 seconds
+                        current_time = time.time()
+                        if verbose and (current_time - last_update_time >= 0.5):
+                            elapsed = current_time - start_time
+                            speed = downloaded_size / elapsed if elapsed > 0 else 0
+                            self._show_progress(downloaded_size, total_size, speed)
+                            last_update_time = current_time
             
+            # Show final status
             if verbose:
-                self._show_final_status(downloaded_size, total_size)
+                elapsed = time.time() - start_time
+                avg_speed = downloaded_size / elapsed if elapsed > 0 else 0
+                self._show_final_status(downloaded_size, total_size, avg_speed)
+            
+            # Store stats for bulk download tracking
+            self.last_download_size = downloaded_size
+            self.last_download_time = time.time() - start_time
             
             return downloaded_size
             
@@ -265,37 +292,41 @@ class DownloadManager:
             self.logger.error(f"Error writing file {filepath}: {e}")
             raise StorageException(f"Failed to write file {filepath}: {e}")
     
-    def _show_progress(self, downloaded: int, total: Optional[int]):
-        """Show download progress."""
+    def _show_progress(self, downloaded: int, total: Optional[int], speed: float = 0):
+        """Show download progress with speed."""
         if total:
             progress = (downloaded / total) * 100
             downloaded_mb = self._format_size_mb(downloaded)
             total_mb = self._format_size_mb(total)
+            speed_str = self._format_speed(speed)
             
             # Create progress bar
-            bar_width = min(40, self.terminal_width - 50)
+            bar_width = min(40, self.terminal_width - 70)
             filled = int(bar_width * progress / 100)
             bar = '#' * filled + '-' * (bar_width - filled)
             
             print(
-                f"\r[{bar}] {progress:.1f}% | {downloaded_mb:.2f} MB / {total_mb:.2f} MB",
+                f"\r[{bar}] {progress:.1f}% | {downloaded_mb:.2f}/{total_mb:.2f} MB | {speed_str}",
                 end='',
                 flush=True
             )
             sys.stdout.flush()
         else:
             downloaded_mb = self._format_size_mb(downloaded)
-            print(f"\rDownloaded: {downloaded_mb:.2f} MB", end='', flush=True)
+            speed_str = self._format_speed(speed)
+            print(f"\rDownloaded: {downloaded_mb:.2f} MB | {speed_str}", end='', flush=True)
             sys.stdout.flush()
     
-    def _show_final_status(self, downloaded: int, total: Optional[int]):
-        """Show final download status."""
+    def _show_final_status(self, downloaded: int, total: Optional[int], avg_speed: float = 0):
+        """Show final download status with average speed."""
         downloaded_mb = self._format_size_mb(downloaded)
+        speed_str = self._format_speed(avg_speed)
+        
         if total:
             total_mb = self._format_size_mb(total)
-            print(f"\nCompleted: {downloaded_mb:.2f} MB / {total_mb:.2f} MB")
+            print(f"\nCompleted: {downloaded_mb:.2f} MB / {total_mb:.2f} MB | Avg: {speed_str}")
         else:
-            print(f"\nCompleted: {downloaded_mb:.2f} MB")
+            print(f"\nCompleted: {downloaded_mb:.2f} MB | Avg: {speed_str}")
     
     def _add_to_index(self, book_url: str, verbose: bool = False):
         """Add downloaded book to index."""
@@ -432,6 +463,9 @@ class DownloadManager:
         self._print_header("BULK DOWNLOAD SESSION")
         print()
         
+        # Track session start time
+        session_start_time = time.time()
+        
         # Check download limits
         account_manager = AccountManager(self.config, self.auth_manager)
         can_download, limit_info = account_manager.check_download_limit(verbose=True)
@@ -440,6 +474,10 @@ class DownloadManager:
             self.logger.error("Download limit reached.")
             print("\nERROR: Download limit reached. Cannot proceed.")
             return []
+        
+        # Store initial limit info
+        initial_downloads_remaining = limit_info.get('downloads_remaining', 0)
+        daily_limit = limit_info.get('daily_limit', 0)
         
         # Limit to remaining downloads
         downloads_remaining = limit_info.get('downloads_remaining', 0)
@@ -452,11 +490,13 @@ class DownloadManager:
         if create_index:
             self.index_manager.create_download_index()
         
-        # Track overall progress
+        # Track overall progress and statistics
         total_books = len(book_urls)
         successful = 0
         failed = 0
         skipped = 0
+        total_bytes_downloaded = 0
+        download_times = []
         
         print(f"\nTotal books to process: {total_books}")
         print()
@@ -486,10 +526,14 @@ class DownloadManager:
                 continue
             
             # Download
+            download_start = time.time()
             success = self.download_book(url, verbose=True, check_limits=False)
             
             if success:
                 successful += 1
+                # Track download stats
+                total_bytes_downloaded += self.last_download_size
+                download_times.append(self.last_download_time)
             else:
                 failed += 1
             
@@ -504,14 +548,69 @@ class DownloadManager:
             if i < len(book_urls):
                 time.sleep(1)
         
+        # Calculate session statistics
+        session_end_time = time.time()
+        total_session_time = session_end_time - session_start_time
+        
+        # Get final download limits
+        final_can_download, final_limit_info = account_manager.check_download_limit(verbose=False)
+        final_downloads_remaining = final_limit_info.get('downloads_remaining', 0)
+        downloads_used = initial_downloads_remaining - final_downloads_remaining
+        
+        # Calculate average download time
+        avg_download_time = sum(download_times) / len(download_times) if download_times else 0
+        
+        # Format time
+        def format_time(seconds):
+            if seconds < 60:
+                return f"{seconds:.1f}s"
+            elif seconds < 3600:
+                minutes = int(seconds // 60)
+                secs = int(seconds % 60)
+                return f"{minutes}m {secs}s"
+            else:
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                return f"{hours}h {minutes}m"
+        
         # Print final summary
         self._print_header("DOWNLOAD COMPLETE")
         print()
-        print(f"Total Books:     {total_books}")
-        print(f"Successful:      {successful}")
-        print(f"Failed:          {failed}")
-        print(f"Skipped:         {skipped}")
+        
+        # Download Results
+        print("RESULTS:")
+        print(f"  Total Books:     {total_books}")
+        print(f"  Successful:      {successful}")
+        print(f"  Failed:          {failed}")
+        print(f"  Skipped:         {skipped}")
         print()
+        
+        # Statistics
+        if successful > 0:
+            print("STATISTICS:")
+            total_mb = self._format_size_mb(total_bytes_downloaded)
+            print(f"  Total Downloaded:    {total_mb:.2f} MB")
+            print(f"  Average per Book:    {(total_mb / successful):.2f} MB")
+            print(f"  Average Time:        {format_time(avg_download_time)}")
+            if total_session_time > 0:
+                overall_speed = total_bytes_downloaded / total_session_time
+                print(f"  Overall Speed:       {self._format_speed(overall_speed)}")
+            print()
+        
+        # Time Information
+        print("TIME:")
+        print(f"  Total Session:       {format_time(total_session_time)}")
+        if successful > 0:
+            print(f"  Time per Book:       {format_time(total_session_time / successful)}")
+        print()
+        
+        # Account Status
+        print("ACCOUNT STATUS:")
+        print(f"  Daily Limit:         {daily_limit}")
+        print(f"  Used This Session:   {downloads_used}")
+        print(f"  Remaining Today:     {final_downloads_remaining}")
+        print()
+        
         self._print_separator('=')
         print()
         
