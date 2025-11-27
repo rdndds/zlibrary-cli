@@ -29,7 +29,6 @@ classifiers = [
 dependencies = [
     "requests>=2.25.1",
     "beautifulsoup4>=4.9.3",
-    "colorlog>=6.7.0",
 ]
 
 [project.scripts]

@@ -62,7 +62,7 @@ DEFAULT_CONFIG = {
     ConfigKeys.LOG_LEVEL: 'INFO',
     ConfigKeys.LOG_FILE: 'logs/zlibrary.log',
     ConfigKeys.LOG_FORMAT: '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
-    ConfigKeys.CONSOLE_LOG_FORMAT: '%(log_color)s[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s%(reset)s',
+    ConfigKeys.CONSOLE_LOG_FORMAT: '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
     ConfigKeys.FILE_LOG_FORMAT: '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
     ConfigKeys.LOG_MAX_BYTES: 10485760,  # 10MB
     ConfigKeys.LOG_BACKUP_COUNT: 5,
