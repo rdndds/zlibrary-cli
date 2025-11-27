@@ -262,8 +262,12 @@ class DownloadManager:
         last_downloaded = 0
         
         try:
+            # Use configured chunk size for better performance
+            chunk_size = self.config.get(ConfigKeys.CHUNK_SIZE, 65536)
+            self.logger.debug(f"Downloading with chunk size: {chunk_size} bytes")
+            
             with open(filepath, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=chunk_size):
                     if chunk:
                         f.write(chunk)
                         downloaded_size += len(chunk)
@@ -375,12 +379,14 @@ class DownloadManager:
                 return False
             
             self.logger.info(f"Downloading from: {download_url}")
+            self.logger.debug(f"Initiating streaming download")
             
-            # Get the file with streaming
+            # Single streaming request (FIX: was downloading twice before!)
             response = self.http_client.get(
                 download_url,
                 headers={'Referer': book_url},
-                allow_redirects=True
+                allow_redirects=True,
+                stream=True  # Stream from the start to avoid double download
             )
             
             if response.status_code != 200:
@@ -389,7 +395,7 @@ class DownloadManager:
                     print(f"ERROR: Download failed with HTTP status {response.status_code}")
                 return False
             
-            # Determine filename
+            # Determine filename from headers (before consuming body)
             final_filename = self._determine_filename(response, book_url, filename)
             
             # Ensure download directory exists
@@ -401,21 +407,7 @@ class DownloadManager:
             if verbose:
                 print(f"Downloading: {final_filename}")
             
-            # Get file with streaming enabled for progress tracking
-            response = self.http_client.get(
-                download_url,
-                headers={'Referer': book_url},
-                allow_redirects=True,
-                stream=True
-            )
-            
-            if response.status_code != 200:
-                self.logger.error(f"Download failed. HTTP {response.status_code}")
-                if verbose:
-                    print(f"ERROR: Download failed with HTTP status {response.status_code}")
-                return False
-            
-            # Download with real-time progress
+            # Download with real-time progress (response body not consumed yet)
             downloaded_size = self._download_with_progress(response, filepath, verbose)
             
             self.logger.info(f"Book downloaded successfully as: {filepath}")

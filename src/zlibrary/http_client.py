@@ -55,6 +55,17 @@ class ZLibraryHTTPClient:
         if self._session is None:
             self._session = requests.Session()
             
+            # Configure connection pooling for better performance
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=10,  # Number of connection pools to cache
+                pool_maxsize=20,  # Maximum connections in each pool
+                max_retries=0,  # We handle retries manually
+                pool_block=False  # Don't block if pool is full
+            )
+            self._session.mount('http://', adapter)
+            self._session.mount('https://', adapter)
+            self.logger.debug("HTTP session configured with connection pooling")
+            
             # Load and set cookies
             try:
                 cookies = self.auth_manager.load_cookies_from_file(
@@ -116,7 +127,15 @@ class ZLibraryHTTPClient:
         """
         session = self._get_session()
         request_headers = self._get_headers(headers)
-        request_timeout = timeout or self.config.get(ConfigKeys.REQUEST_TIMEOUT)
+        
+        # Use smart timeouts (connect, read) for better handling of large downloads
+        if timeout:
+            request_timeout = timeout
+        else:
+            connect_timeout = self.config.get(ConfigKeys.CONNECT_TIMEOUT, 10)
+            read_timeout = self.config.get(ConfigKeys.READ_TIMEOUT, 300)
+            request_timeout = (connect_timeout, read_timeout)
+        
         max_retries = self.config.get(ConfigKeys.MAX_RETRIES)
         retry_delay = self.config.get(ConfigKeys.RETRY_DELAY)
         
@@ -241,7 +260,7 @@ class ZLibraryHTTPClient:
         url: str,
         destination: str,
         headers: Optional[Dict[str, str]] = None,
-        chunk_size: int = 8192
+        chunk_size: Optional[int] = None
     ) -> bool:
         """
         Download a file with streaming and progress tracking.
@@ -250,7 +269,7 @@ class ZLibraryHTTPClient:
             url: URL to download from
             destination: Local file path to save to
             headers: Optional additional headers
-            chunk_size: Size of chunks to download
+            chunk_size: Size of chunks to download (uses config default if None)
             
         Returns:
             True if successful, False otherwise
@@ -261,33 +280,45 @@ class ZLibraryHTTPClient:
         session = self._get_session()
         request_headers = self._get_headers(headers)
         
+        # Use configured chunk size for better performance (default 64KB)
+        if chunk_size is None:
+            chunk_size = self.config.get(ConfigKeys.CHUNK_SIZE, 65536)
+        
         try:
             self.logger.info(f"Starting file download from {url}")
+            self.logger.debug(f"Using chunk size: {chunk_size} bytes")
+            
+            # Use smart timeouts for large downloads
+            connect_timeout = self.config.get(ConfigKeys.CONNECT_TIMEOUT, 10)
+            read_timeout = self.config.get(ConfigKeys.READ_TIMEOUT, 300)
             
             response = session.get(
                 url,
                 headers=request_headers,
                 stream=True,
-                timeout=self.config.get(ConfigKeys.REQUEST_TIMEOUT)
+                timeout=(connect_timeout, read_timeout)
             )
             response.raise_for_status()
             
             # Get file size if available
             total_size = int(response.headers.get('content-length', 0))
+            self.logger.debug(f"File size: {total_size} bytes" if total_size else "File size unknown")
             
             with open(destination, 'wb') as f:
                 downloaded = 0
-                for chunk in response.iter_content(chunk_size=chunk_size):
+                update_interval = 10  # Update progress every 10 chunks
+                for i, chunk in enumerate(response.iter_content(chunk_size=chunk_size)):
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
                         
-                        # Log progress for large files
-                        if total_size > 0 and downloaded % (chunk_size * 100) == 0:
+                        # Log progress more frequently for better visibility
+                        if total_size > 0 and i % update_interval == 0:
                             progress = (downloaded / total_size) * 100
-                            self.logger.debug(f"Download progress: {progress:.1f}%")
+                            self.logger.debug(f"Download progress: {progress:.1f}% ({downloaded}/{total_size} bytes)")
             
             self.logger.info(f"File downloaded successfully to {destination}")
+            self.logger.debug(f"Total downloaded: {downloaded} bytes")
             return True
             
         except requests.exceptions.RequestException as e:

@@ -18,9 +18,16 @@ DEFAULT_HEADERS = {
 
 # Request Configuration
 DEFAULT_REQUEST_TIMEOUT = 30
+DEFAULT_CONNECT_TIMEOUT = 10  # Fast fail for connection issues
+DEFAULT_READ_TIMEOUT = 300  # 5 minutes for large downloads
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_RETRY_DELAY = 1
 RETRY_STATUS_CODES = [429, 500, 502, 503, 504]
+
+# Download Configuration
+DEFAULT_CHUNK_SIZE = 65536  # 64KB chunks for better performance
+DEFAULT_MAX_WORKERS = 3  # Concurrent downloads in bulk mode
+DEFAULT_PROGRESS_UPDATE_INTERVAL = 10  # Update progress every N chunks
 
 # Configuration Keys
 class ConfigKeys:
@@ -34,8 +41,12 @@ class ConfigKeys:
     DEFAULT_SEARCH_LIMIT = 'default_search_limit'
     USER_AGENT = 'user_agent'
     REQUEST_TIMEOUT = 'request_timeout'
+    CONNECT_TIMEOUT = 'connect_timeout'
+    READ_TIMEOUT = 'read_timeout'
     MAX_RETRIES = 'max_retries'
     RETRY_DELAY = 'retry_delay'
+    CHUNK_SIZE = 'chunk_size'
+    MAX_WORKERS = 'max_workers'
     LOG_LEVEL = 'log_level'
     LOG_FILE = 'log_file'
     LOG_FORMAT = 'log_format'
@@ -57,8 +68,12 @@ DEFAULT_CONFIG = {
     ConfigKeys.DEFAULT_SEARCH_LIMIT: 10,
     ConfigKeys.USER_AGENT: DEFAULT_USER_AGENT,
     ConfigKeys.REQUEST_TIMEOUT: DEFAULT_REQUEST_TIMEOUT,
+    ConfigKeys.CONNECT_TIMEOUT: DEFAULT_CONNECT_TIMEOUT,
+    ConfigKeys.READ_TIMEOUT: DEFAULT_READ_TIMEOUT,
     ConfigKeys.MAX_RETRIES: DEFAULT_MAX_RETRIES,
     ConfigKeys.RETRY_DELAY: DEFAULT_RETRY_DELAY,
+    ConfigKeys.CHUNK_SIZE: DEFAULT_CHUNK_SIZE,
+    ConfigKeys.MAX_WORKERS: DEFAULT_MAX_WORKERS,
     ConfigKeys.LOG_LEVEL: 'INFO',
     ConfigKeys.LOG_FILE: 'logs/zlibrary.log',
     ConfigKeys.LOG_FORMAT: '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
@@ -82,8 +97,12 @@ ENV_VAR_MAPPING = {
     f'{ENV_VAR_PREFIX}DEFAULT_SEARCH_LIMIT': ConfigKeys.DEFAULT_SEARCH_LIMIT,
     f'{ENV_VAR_PREFIX}USER_AGENT': ConfigKeys.USER_AGENT,
     f'{ENV_VAR_PREFIX}REQUEST_TIMEOUT': ConfigKeys.REQUEST_TIMEOUT,
+    f'{ENV_VAR_PREFIX}CONNECT_TIMEOUT': ConfigKeys.CONNECT_TIMEOUT,
+    f'{ENV_VAR_PREFIX}READ_TIMEOUT': ConfigKeys.READ_TIMEOUT,
     f'{ENV_VAR_PREFIX}MAX_RETRIES': ConfigKeys.MAX_RETRIES,
     f'{ENV_VAR_PREFIX}RETRY_DELAY': ConfigKeys.RETRY_DELAY,
+    f'{ENV_VAR_PREFIX}CHUNK_SIZE': ConfigKeys.CHUNK_SIZE,
+    f'{ENV_VAR_PREFIX}MAX_WORKERS': ConfigKeys.MAX_WORKERS,
     f'{ENV_VAR_PREFIX}LOG_LEVEL': ConfigKeys.LOG_LEVEL,
     f'{ENV_VAR_PREFIX}LOG_FILE': ConfigKeys.LOG_FILE,
     f'{ENV_VAR_PREFIX}LOG_FORMAT': ConfigKeys.LOG_FORMAT,
