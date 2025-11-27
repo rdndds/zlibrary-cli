@@ -142,9 +142,13 @@ class DownloadCommandHandler(BaseCommandHandler):
     def _handle_bulk_download(self, urls: List[str], args) -> bool:
         """Handle bulk download with progress indicator."""
         UserFeedback.info(f"Starting bulk download of {len(urls)} books...")
-        
+
+        # Determine max workers from args or default to 1 (the same as sequential)
+        max_workers = getattr(args, 'threads', 1)  # Use 1 as default for backward compatibility
+        UserFeedback.info(f"Using {max_workers} parallel thread(s) for download")
+
         try:
-            results = self.download_manager.bulk_download(urls)
+            results = self.download_manager.bulk_download(urls, max_workers=max_workers)
             
             # Handle export if requested
             if hasattr(args, 'export') and args.export:

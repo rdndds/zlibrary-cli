@@ -95,6 +95,13 @@ def _add_search_parser(subparsers):
         action='store_true',
         help='Show detailed information for each result'
     )
+    search_parser.add_argument(
+        '-t', '--threads',
+        type=int,
+        default=1,
+        metavar='N',
+        help='Number of parallel download threads when using --download (default: 1, max recommended: 5)'
+    )
 
 
 def _add_download_parser(subparsers):
@@ -142,6 +149,13 @@ def _add_download_parser(subparsers):
         '--details',
         action='store_true',
         help='Display detailed book information before download'
+    )
+    download_parser.add_argument(
+        '-t', '--threads',
+        type=int,
+        default=1,
+        metavar='N',
+        help='Number of parallel download threads (default: 1, max recommended: 5)'
     )
 
 

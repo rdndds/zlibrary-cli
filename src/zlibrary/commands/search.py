@@ -53,7 +53,7 @@ class SearchCommandHandler(BaseCommandHandler):
             
             # Handle download if requested
             if args.download:
-                return self._handle_download(results)
+                return self._handle_download(results, args)
             
             # Only show search completion message if not downloading
             UserFeedback.success(f"Search completed: {len(results)} results found")
@@ -189,32 +189,36 @@ class SearchCommandHandler(BaseCommandHandler):
             self.logger.exception("Export error")
             return False
     
-    def _handle_download(self, results) -> bool:
+    def _handle_download(self, results, args=None) -> bool:
         """Handle download functionality."""
         if not results:
             UserFeedback.warning("No results to download")
             return False
-        
+
         # Check download limits
         UserFeedback.info("Checking download limits...")
         can_download, limit_info = self.account_manager.check_download_limit(verbose=False)
-        
+
         if not can_download:
             error_msg = self.error_handler.handle_download_limit_error(limit_info)
             UserFeedback.error(error_msg)
             return False
-        
+
         # Perform bulk download
         index_manager = IndexManager(self.config)
         download_manager = DownloadManager(self.config, self.auth_manager, index_manager)
-        
+
         book_urls = [book.url for book in results]
-        
+
+        # Determine max workers from args or default to 1 (sequential)
+        max_workers = getattr(args, 'threads', 1) if args else 1
+        UserFeedback.info(f"Using {max_workers} parallel thread(s) for download")
+
         try:
-            bulk_results = download_manager.bulk_download(book_urls)
+            bulk_results = download_manager.bulk_download(book_urls, max_workers=max_workers)
             successful = sum(1 for r in bulk_results if r.get('status') == 'success')
             return successful > 0
-            
+
         except Exception as e:
             UserFeedback.error(f"Download failed: {e}")
             self.logger.exception("Download error")

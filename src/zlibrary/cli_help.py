@@ -54,19 +54,21 @@ OPTIONS:
   --download                    Download found books after search
   --export [json|bibtex|both]   Export search results (default: bibtex)
   --details                     Show detailed information for each result
+  -t, --threads N               Number of parallel download threads when using --download (default: 1)
 
 EXAMPLES:
   zlib search "machine learning"
   zlib search --title "Python Programming" --limit 5
   zlib search "deep learning" --details --export
   zlib search "statistics" --download
-  zlib search "python" --no-limit
+  zlib search "python" --no-limit --download --threads 3
 """
 
 DOWNLOAD_HELP = """
 DESCRIPTION:
   Download books from Z-Library using their URLs.
   Supports single downloads, bulk downloads, and reading URLs from files.
+  Use -t/--threads to specify the number of parallel downloads (default: 1).
 
 OPTIONS:
   url [url ...]                 Book URL(s) to download
@@ -75,6 +77,7 @@ OPTIONS:
   --urls-file URLS_FILE         File containing URLs (one per line)
   --export [json|bibtex|both]   Export book details (default: bibtex)
   --details                     Show detailed book information before download
+  -t, --threads N               Number of parallel download threads (default: 1)
 
 EXAMPLES:
   Single download:
@@ -84,11 +87,12 @@ EXAMPLES:
 
   Multiple downloads:
     zlib download URL1 URL2 URL3
+    zlib download URL1 URL2 URL3 --threads 3
     zlib download URL1 URL2 URL3 --details --export
 
   Download from file:
     zlib download @book_urls.txt
-    zlib download --urls-file book_urls.txt --details
+    zlib download --urls-file book_urls.txt --threads 3 --details
 """
 
 ACCOUNT_HELP = """

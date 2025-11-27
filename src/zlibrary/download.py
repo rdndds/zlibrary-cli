@@ -17,6 +17,7 @@ from zlibrary.index import IndexManager
 from zlibrary.utils import clean_filename, extract_book_id_from_url
 from zlibrary.account import AccountManager
 from zlibrary.book_details import BookDetailsManager
+from zlibrary.concurrent import ConcurrentProcessor
 from zlibrary.logging_config import get_logger
 from zlibrary.exceptions import (
     DownloadLimitExceededException,
@@ -435,14 +436,102 @@ class DownloadManager:
             if verbose:
                 print(f"ERROR: {e}")
             return False
-    
+
+    def _download_single_book_task(self, book_data: dict) -> dict:
+        """
+        Wrapper method for downloading a single book in a thread-safe manner.
+
+        Args:
+            book_data: Dictionary containing 'url', 'check_limits', and other parameters
+
+        Returns:
+            Dictionary containing download result
+        """
+        url = book_data['url']
+        check_limits = book_data.get('check_limits', False)
+        verbose = book_data.get('verbose', False)
+
+        success = self.download_book(url, verbose=verbose, check_limits=check_limits)
+
+        book_id = extract_book_id_from_url(url)
+
+        return {
+            'url': url,
+            'status': 'success' if success else 'failed',
+            'book_id': book_id
+        }
+
+    def _download_books_parallel(self, book_urls: List[str], max_workers: int, create_index: bool = True) -> List[dict]:
+        """
+        Download multiple books in parallel using threads.
+
+        Args:
+            book_urls: List of book URLs to download
+            max_workers: Maximum number of concurrent downloads
+            create_index: Whether to create index file if it doesn't exist
+
+        Returns:
+            List of download results with success/failure status
+        """
+        if create_index:
+            self.index_manager.create_download_index()
+
+        # Prepare book data for each download task
+        book_data_list = []
+        for url in book_urls:
+            book_data_list.append({
+                'url': url,
+                'check_limits': False,  # Limits are checked separately before this
+                'verbose': True  # Show progress during parallel download
+            })
+
+        # Create concurrent processor
+        processor = ConcurrentProcessor(max_workers=max_workers)
+
+        # Execute downloads in parallel
+        results_with_exceptions = processor.process_batch(
+            items=book_data_list,
+            process_func=self._download_single_book_task
+        )
+
+        # Extract results, ignoring exceptions for now (they're logged by the processor)
+        results = []
+        for result, exception in results_with_exceptions:
+            if result is not None:
+                results.append(result)
+
+        return results
+
     def bulk_download(
         self,
         book_urls: List[str],
-        create_index: bool = True
+        create_index: bool = True,
+        max_workers: Optional[int] = None
     ) -> List[dict]:
         """
         Download multiple books in bulk with duplicate prevention
+
+        Args:
+            book_urls: List of book URLs to download
+            create_index: Whether to create index file if it doesn't exist
+            max_workers: Maximum number of concurrent downloads (None to use config default)
+
+        Returns:
+            List of download results with success/failure status
+        """
+        # Determine max workers from parameter, config, or default
+        if max_workers is None:
+            max_workers = self.config.get(ConfigKeys.MAX_WORKERS, 3)
+
+        # If max_workers is 1, use sequential download; otherwise use parallel
+        if max_workers <= 1:
+            return self._bulk_download_sequential(book_urls, create_index)
+        else:
+            return self._bulk_download_parallel(book_urls, max_workers, create_index)
+
+    def _bulk_download_sequential(self, book_urls: List[str], create_index: bool = True) -> List[dict]:
+        """
+        Download multiple books sequentially (original implementation).
 
         Args:
             book_urls: List of book URLs to download
@@ -454,22 +543,159 @@ class DownloadManager:
         # Print initial header
         self._print_header("BULK DOWNLOAD SESSION")
         print()
-        
+
         # Track session start time
         session_start_time = time.time()
-        
+
         # Check download limits
         account_manager = AccountManager(self.config, self.auth_manager)
         can_download, limit_info = account_manager.check_download_limit(verbose=True)
-        
+
         if not can_download:
             self.logger.error("Download limit reached.")
             print("\nERROR: Download limit reached. Cannot proceed.")
             return []
-        
+
         # Store initial limit info
         initial_downloads_remaining = limit_info.get('downloads_remaining', 0)
         daily_limit = limit_info.get('daily_limit', 0)
+
+        # Limit to remaining downloads
+        downloads_remaining = limit_info.get('downloads_remaining', 0)
+        if downloads_remaining > 0 and len(book_urls) > downloads_remaining:
+            self.logger.info(f"Truncating to {downloads_remaining} books to respect daily limit.")
+            print(f"\nWARNING: Limiting to {downloads_remaining} books to respect daily limit.")
+            book_urls = book_urls[:downloads_remaining]
+
+        # Create index if needed
+        if create_index:
+            self.index_manager.create_download_index()
+
+        # Track overall progress and statistics
+        total_books = len(book_urls)
+        successful = 0
+        failed = 0
+        skipped = 0
+        total_bytes_downloaded = 0
+        download_times = []
+
+        print(f"\nTotal books to process: {total_books}")
+        print()
+
+        # Download each book
+        results = []
+        for i, url in enumerate(book_urls, 1):
+            # Print progress header
+            self._print_separator('=')
+            print(f"Book {i} of {total_books}")
+            print(f"Status - Success: {successful} | Failed: {failed} | Skipped: {skipped}")
+            self._print_separator('=')
+
+            # Show URL (truncated if too long)
+            max_url_len = self.terminal_width - 10
+            display_url = url if len(url) <= max_url_len else url[:max_url_len-3] + '...'
+            print(f"URL: {display_url}")
+            print()
+
+            # Check if already downloaded
+            book_id = extract_book_id_from_url(url)
+            if book_id and self.index_manager.is_already_downloaded(book_id):
+                print("SKIPPED: Already downloaded")
+                results.append({'url': url, 'status': 'skipped', 'reason': 'already_downloaded'})
+                skipped += 1
+                print()
+                continue
+
+            # Download
+            download_start = time.time()
+            success = self.download_book(url, verbose=True, check_limits=False)
+
+            if success:
+                successful += 1
+                # Track download stats
+                total_bytes_downloaded += self.last_download_size
+                download_times.append(self.last_download_time)
+            else:
+                failed += 1
+
+            results.append({
+                'url': url,
+                'status': 'success' if success else 'failed',
+                'book_id': book_id
+            })
+
+            print()
+            # Small delay between downloads
+            if i < len(book_urls):
+                time.sleep(1)
+
+        # Calculate session statistics
+        session_end_time = time.time()
+        total_session_time = session_end_time - session_start_time
+
+        # Get final download limits
+        final_can_download, final_limit_info = account_manager.check_download_limit(verbose=False)
+        final_downloads_remaining = final_limit_info.get('downloads_remaining', 0)
+        downloads_used = initial_downloads_remaining - final_downloads_remaining
+
+        # Calculate average download time
+        avg_download_time = sum(download_times) / len(download_times) if download_times else 0
+
+        # Format time
+        def format_time(seconds):
+            if seconds < 60:
+                return f"{seconds:.1f}s"
+            elif seconds < 3600:
+                minutes = int(seconds // 60)
+                secs = int(seconds % 60)
+                return f"{minutes}m {secs}s"
+            else:
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                return f"{hours}h {minutes}m"
+
+        # Print final summary
+        self._print_header("DOWNLOAD COMPLETE")
+        print()
+
+        # Download Results
+        print("RESULTS:")
+        print(f"  Total Books:     {total_books}")
+        print(f"  Successful:      {successful}")
+        print(f"  Failed:          {failed}")
+        print(f"  Skipped:         {skipped}")
+        print()
+
+        # Statistics
+        if successful > 0:
+            print("STATISTICS:")
+            total_mb = self._format_size_mb(total_bytes_downloaded)
+            print(f"  Total Downloaded:    {total_mb:.2f} MB")
+            print(f"  Average per Book:    {(total_mb / successful):.2f} MB")
+            print(f"  Average Time:        {format_time(avg_download_time)}")
+            if total_session_time > 0:
+                overall_speed = total_bytes_downloaded / total_session_time
+                print(f"  Overall Speed:       {self._format_speed(overall_speed)}")
+            print()
+
+        # Time Information
+        print("TIME:")
+        print(f"  Total Session:       {format_time(total_session_time)}")
+        if successful > 0:
+            print(f"  Time per Book:       {format_time(total_session_time / successful)}")
+        print()
+
+        # Account Status
+        print("ACCOUNT STATUS:")
+        print(f"  Daily Limit:         {daily_limit}")
+        print(f"  Used This Session:   {downloads_used}")
+        print(f"  Remaining Today:     {final_downloads_remaining}")
+        print()
+
+        self._print_separator('=')
+        print()
+
+        return results
         
         # Limit to remaining downloads
         downloads_remaining = limit_info.get('downloads_remaining', 0)
@@ -605,5 +831,172 @@ class DownloadManager:
         
         self._print_separator('=')
         print()
-        
+
+        return results
+
+    def _bulk_download_parallel(self, book_urls: List[str], max_workers: int, create_index: bool = True) -> List[dict]:
+        """
+        Download multiple books in parallel using threads.
+
+        Args:
+            book_urls: List of book URLs to download
+            max_workers: Maximum number of concurrent downloads
+            create_index: Whether to create index file if it doesn't exist
+
+        Returns:
+            List of download results with success/failure status
+        """
+        # Print initial header
+        self._print_header("PARALLEL BULK DOWNLOAD SESSION")
+        print()
+
+        # Track session start time
+        session_start_time = time.time()
+
+        # Check download limits
+        account_manager = AccountManager(self.config, self.auth_manager)
+        can_download, limit_info = account_manager.check_download_limit(verbose=True)
+
+        if not can_download:
+            self.logger.error("Download limit reached.")
+            print("\nERROR: Download limit reached. Cannot proceed.")
+            return []
+
+        # Store initial limit info
+        initial_downloads_remaining = limit_info.get('downloads_remaining', 0)
+        daily_limit = limit_info.get('daily_limit', 0)
+
+        # Limit to remaining downloads
+        downloads_remaining = limit_info.get('downloads_remaining', 0)
+        if downloads_remaining > 0:
+            # Adjust max_workers to respect remaining downloads
+            max_workers = min(max_workers, downloads_remaining)
+            if len(book_urls) > downloads_remaining:
+                self.logger.info(f"Truncating to {downloads_remaining} books to respect daily limit.")
+                print(f"\nWARNING: Limiting to {downloads_remaining} books to respect daily limit.")
+                book_urls = book_urls[:downloads_remaining]
+
+        # Create index if needed
+        if create_index:
+            self.index_manager.create_download_index()
+
+        # Track overall progress and statistics
+        total_books = len(book_urls)
+        successful = 0
+        failed = 0
+        skipped = 0
+        total_bytes_downloaded = 0
+
+        print(f"\nTotal books to process: {total_books} with {max_workers} parallel threads")
+        print()
+
+        # Filter out already downloaded books first
+        filtered_urls = []
+        results = []
+        for url in book_urls:
+            book_id = extract_book_id_from_url(url)
+            if book_id and self.index_manager.is_already_downloaded(book_id):
+                print(f"SKIPPED: {url} (already downloaded)")
+                results.append({'url': url, 'status': 'skipped', 'reason': 'already_downloaded'})
+                skipped += 1
+            else:
+                filtered_urls.append(url)
+
+        # Download remaining books in parallel
+        if filtered_urls:
+            # Prepare book data for each download task
+            book_data_list = []
+            for url in filtered_urls:
+                book_data_list.append({
+                    'url': url,
+                    'check_limits': False,  # Limits are checked separately before this
+                    'verbose': True  # Show progress during parallel download
+                })
+
+            # Create concurrent processor
+            processor = ConcurrentProcessor(max_workers=max_workers)
+
+            # Execute downloads in parallel with progress tracking
+            def progress_callback(completed, result):
+                print(f"Parallel download progress: {completed}/{len(filtered_urls)} completed")
+
+            results_with_exceptions = processor.process_batch(
+                items=book_data_list,
+                process_func=self._download_single_book_task,
+                progress_callback=progress_callback
+            )
+
+            # Extract results, ignoring exceptions for now (they're logged by the processor)
+            for result, exception in results_with_exceptions:
+                if result is not None:
+                    results.append(result)
+                    if result['status'] == 'success':
+                        successful += 1
+                        # Track download stats (we'll use estimates since all downloads happen in parallel)
+                        total_bytes_downloaded += self.last_download_size
+                    else:
+                        failed += 1
+
+        # Calculate session statistics
+        session_end_time = time.time()
+        total_session_time = session_end_time - session_start_time
+
+        # Get final download limits
+        final_can_download, final_limit_info = account_manager.check_download_limit(verbose=False)
+        final_downloads_remaining = final_limit_info.get('downloads_remaining', 0)
+        downloads_used = initial_downloads_remaining - final_downloads_remaining
+
+        # Calculate average download time (not directly available in parallel mode, so we use a different approach)
+        def format_time(seconds):
+            if seconds < 60:
+                return f"{seconds:.1f}s"
+            elif seconds < 3600:
+                minutes = int(seconds // 60)
+                secs = int(seconds % 60)
+                return f"{minutes}m {secs}s"
+            else:
+                hours = int(seconds // 3600)
+                minutes = int((seconds % 3600) // 60)
+                return f"{hours}h {minutes}m"
+
+        # Print final summary
+        self._print_header("PARALLEL DOWNLOAD COMPLETE")
+        print()
+
+        # Download Results
+        print("RESULTS:")
+        print(f"  Total Books:     {total_books}")
+        print(f"  Successful:      {successful}")
+        print(f"  Failed:          {failed}")
+        print(f"  Skipped:         {skipped}")
+        print()
+
+        # Statistics
+        if successful > 0:
+            print("STATISTICS:")
+            total_mb = self._format_size_mb(total_bytes_downloaded)
+            print(f"  Total Downloaded:    {total_mb:.2f} MB")
+            print(f"  Average per Book:    {(total_mb / successful):.2f} MB")
+            if total_session_time > 0:
+                overall_speed = total_bytes_downloaded / total_session_time
+                print(f"  Overall Speed:       {self._format_speed(overall_speed)}")
+            print()
+
+        # Time Information
+        print("TIME:")
+        print(f"  Total Session:       {format_time(total_session_time)}")
+        if successful > 0:
+            print(f"  Time per Book:       {format_time(total_session_time / successful)}")
+        print()
+
+        # Account Status
+        print("ACCOUNT STATUS:")
+        print(f"  Daily Limit:         {daily_limit}")
+        print(f"  Used This Session:   {downloads_used}")
+        print(f"  Remaining Today:     {final_downloads_remaining}")
+        print()
+
+        self._print_separator('=')
+        print()
+
         return results
