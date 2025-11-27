@@ -4,21 +4,43 @@ Command-line tool for searching and downloading books from Z-Library.
 
 ## Installation
 
-### With pipx (Recommended)
+### Method 1: Direct from GitHub (Recommended)
 
 ```bash
+# Clone the repository
+git clone https://github.com/rdndds/zlibrary-cli.git
+cd zlibrary-cli
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the tool
+python main.py --help
+```
+
+### Method 2: With pipx
+
+If you prefer isolated installation with pipx:
+
+```bash
+# Install system dependencies (Ubuntu/Debian)
+sudo apt install python3-venv python3-pip
+
+# Install pipx
+python3 -m pip install --user pipx
+python3 -m pipx ensurepath
+
+# Install zlibrary-cli
 pipx install git+https://github.com/rdndds/zlibrary-cli.git
 ```
 
-### Manual Setup
-
-```bash
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
-
 **Requirements:** Python 3.8+
+
+**Note:** For pipx to work, you need `python3-venv` installed on your system.
 
 ## Authentication
 
@@ -84,6 +106,41 @@ Create `config.json` in project root (optional):
 ```
 
 Or use environment variables: `ZLIB_COOKIES_FILE`, `ZLIB_DOWNLOAD_DIR`, `ZLIB_LOG_LEVEL`, etc.
+
+## Troubleshooting
+
+### pipx Installation Fails
+
+If you get an error like `Command 'python3 -m venv' failed`:
+
+```bash
+# Ubuntu/Debian
+sudo apt install python3-venv python3-pip
+
+# Fedora/RHEL
+sudo dnf install python3-pip
+
+# Then try pipx installation again
+```
+
+### Alternative: Use pip directly
+
+```bash
+pip install git+https://github.com/rdndds/zlibrary-cli.git
+```
+
+### Manual Installation
+
+If all else fails, clone and run directly:
+
+```bash
+git clone https://github.com/rdndds/zlibrary-cli.git
+cd zlibrary-cli
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python main.py --help
+```
 
 ## License
 
