@@ -53,9 +53,9 @@ class SearchCommandHandler(BaseCommandHandler):
             
             # Handle download if requested
             if args.download:
-                if not self._handle_download(results):
-                    return False
+                return self._handle_download(results)
             
+            # Only show search completion message if not downloading
             UserFeedback.success(f"Search completed: {len(results)} results found")
             return True
             
@@ -209,12 +209,11 @@ class SearchCommandHandler(BaseCommandHandler):
         download_manager = DownloadManager(self.config, self.auth_manager, index_manager)
         
         book_urls = [book.url for book in results]
-        UserFeedback.info(f"Starting bulk download of {len(book_urls)} books...")
         
         try:
             bulk_results = download_manager.bulk_download(book_urls)
-            print(DownloadResultFormatter.format_summary(bulk_results))
-            return True
+            successful = sum(1 for r in bulk_results if r.get('status') == 'success')
+            return successful > 0
             
         except Exception as e:
             UserFeedback.error(f"Download failed: {e}")

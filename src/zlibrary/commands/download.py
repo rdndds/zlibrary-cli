@@ -146,9 +146,6 @@ class DownloadCommandHandler(BaseCommandHandler):
         try:
             results = self.download_manager.bulk_download(urls)
             
-            # Display summary
-            print(DownloadResultFormatter.format_summary(results))
-            
             # Handle export if requested
             if hasattr(args, 'export') and args.export:
                 self._export_downloaded_books(urls, args.export)
@@ -156,12 +153,8 @@ class DownloadCommandHandler(BaseCommandHandler):
             # Count successes
             successful = sum(1 for r in results if r.get('status') == 'success')
             
-            if successful > 0:
-                UserFeedback.success(f"Bulk download completed: {successful}/{len(urls)} successful")
-                return True
-            else:
-                UserFeedback.error("No books were successfully downloaded")
-                return False
+            # Return success if any downloads succeeded
+            return successful > 0
                 
         except Exception as e:
             UserFeedback.error(f"Bulk download failed: {e}")

@@ -92,7 +92,8 @@ class ZLibraryHTTPClient:
         params: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
         timeout: Optional[int] = None,
-        allow_redirects: bool = True
+        allow_redirects: bool = True,
+        stream: bool = False
     ) -> requests.Response:
         """
         Perform GET request with retry logic.
@@ -103,6 +104,7 @@ class ZLibraryHTTPClient:
             headers: Optional additional headers
             timeout: Request timeout (uses config default if None)
             allow_redirects: Whether to follow redirects
+            stream: Whether to stream the response
             
         Returns:
             Response object
@@ -129,7 +131,8 @@ class ZLibraryHTTPClient:
                     params=params,
                     headers=request_headers,
                     timeout=request_timeout,
-                    allow_redirects=allow_redirects
+                    allow_redirects=allow_redirects,
+                    stream=stream
                 )
                 
                 # Check if we should retry based on status code

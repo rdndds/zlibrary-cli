@@ -2,9 +2,11 @@
 Download functionality for Z-Library Search Application
 """
 import os
+import sys
 import time
 import urllib.parse
 import re
+import shutil
 from typing import Optional, List, Tuple
 
 from zlibrary.config import Config
@@ -34,6 +36,31 @@ class DownloadManager:
         self.index_manager = index_manager
         self.http_client = ZLibraryHTTPClient(config, auth_manager)
         self.logger = get_logger(__name__)
+        self.terminal_width = self._get_terminal_width()
+    
+    def _get_terminal_width(self) -> int:
+        """Get terminal width, with fallback to 80 columns."""
+        try:
+            return shutil.get_terminal_size().columns
+        except:
+            return 80
+    
+    def _print_separator(self, char: str = '-'):
+        """Print a separator line that adapts to terminal width."""
+        print(char * self.terminal_width)
+    
+    def _print_header(self, text: str):
+        """Print a centered header."""
+        self._print_separator('=')
+        padding = (self.terminal_width - len(text)) // 2
+        print(' ' * padding + text)
+        self._print_separator('=')
+    
+    def _print_section(self, text: str):
+        """Print a section separator with text."""
+        self._print_separator('-')
+        print(text)
+        self._print_separator('-')
     
     def _check_download_limit(self, verbose: bool = True) -> bool:
         """
@@ -244,23 +271,31 @@ class DownloadManager:
             progress = (downloaded / total) * 100
             downloaded_mb = self._format_size_mb(downloaded)
             total_mb = self._format_size_mb(total)
+            
+            # Create progress bar
+            bar_width = min(40, self.terminal_width - 50)
+            filled = int(bar_width * progress / 100)
+            bar = '#' * filled + '-' * (bar_width - filled)
+            
             print(
-                f"\r  Progress: {progress:.1f}% ({downloaded_mb:.2f} MB / {total_mb:.2f} MB)",
+                f"\r[{bar}] {progress:.1f}% | {downloaded_mb:.2f} MB / {total_mb:.2f} MB",
                 end='',
                 flush=True
             )
+            sys.stdout.flush()
         else:
             downloaded_mb = self._format_size_mb(downloaded)
-            print(f"\r  Downloaded: {downloaded_mb:.2f} MB", end='', flush=True)
+            print(f"\rDownloaded: {downloaded_mb:.2f} MB", end='', flush=True)
+            sys.stdout.flush()
     
     def _show_final_status(self, downloaded: int, total: Optional[int]):
         """Show final download status."""
         downloaded_mb = self._format_size_mb(downloaded)
         if total:
             total_mb = self._format_size_mb(total)
-            print(f"\n  Downloaded: {downloaded_mb:.2f} MB / {total_mb:.2f} MB (100%)")
+            print(f"\nCompleted: {downloaded_mb:.2f} MB / {total_mb:.2f} MB")
         else:
-            print(f"\n  Downloaded: {downloaded_mb:.2f} MB")
+            print(f"\nCompleted: {downloaded_mb:.2f} MB")
     
     def _add_to_index(self, book_url: str, verbose: bool = False):
         """Add downloaded book to index."""
@@ -305,7 +340,7 @@ class DownloadManager:
             download_url = self._resolve_download_url(book_url)
             if not download_url:
                 if verbose:
-                    print("  ✗ Could not find download URL")
+                    print("ERROR: Could not find download URL")
                 return False
             
             self.logger.info(f"Downloading from: {download_url}")
@@ -320,7 +355,7 @@ class DownloadManager:
             if response.status_code != 200:
                 self.logger.error(f"Download failed. HTTP {response.status_code}")
                 if verbose:
-                    print(f"  ✗ Download failed: HTTP {response.status_code}")
+                    print(f"ERROR: Download failed with HTTP status {response.status_code}")
                 return False
             
             # Determine filename
@@ -333,39 +368,29 @@ class DownloadManager:
             filepath = os.path.join(download_dir, final_filename)
             
             if verbose:
-                print(f"  ⬇ Downloading: {final_filename}")
+                print(f"Downloading: {final_filename}")
             
-            # Get file size and download with progress
+            # Get file with streaming enabled for progress tracking
             response = self.http_client.get(
                 download_url,
                 headers={'Referer': book_url},
-                allow_redirects=True
+                allow_redirects=True,
+                stream=True
             )
             
-            # Since our HTTP client doesn't expose stream parameter directly,
-            # we'll use the response content
-            total_size = int(response.headers.get('Content-Length', 0))
-            
-            try:
-                with open(filepath, 'wb') as f:
-                    f.write(response.content)
-                
-                downloaded_size = len(response.content)
+            if response.status_code != 200:
+                self.logger.error(f"Download failed. HTTP {response.status_code}")
                 if verbose:
-                    downloaded_mb = self._format_size_mb(downloaded_size)
-                    if total_size > 0:
-                        total_mb = self._format_size_mb(total_size)
-                        print(f"  Downloaded: {downloaded_mb:.2f} MB / {total_mb:.2f} MB (100%)")
-                    else:
-                        print(f"  Downloaded: {downloaded_mb:.2f} MB")
+                    print(f"ERROR: Download failed with HTTP status {response.status_code}")
+                return False
             
-            except OSError as e:
-                self.logger.error(f"Error writing file {filepath}: {e}")
-                raise StorageException(f"Failed to write file {filepath}: {e}")
+            # Download with real-time progress
+            downloaded_size = self._download_with_progress(response, filepath, verbose)
             
             self.logger.info(f"Book downloaded successfully as: {filepath}")
             if verbose:
-                print(f"  Saved as: {os.path.basename(filepath)}")
+                print(f"SUCCESS: Saved as {os.path.basename(filepath)}")
+
             
             # Add to download index
             self._add_to_index(book_url, verbose=False)
@@ -375,17 +400,17 @@ class DownloadManager:
         except NetworkException as e:
             self.logger.error(f"Network error during download: {e}")
             if verbose:
-                print(f"  ✗ Network error: {e}")
+                print(f"ERROR: Network error - {e}")
             return False
         except StorageException as e:
             self.logger.error(f"Storage error: {e}")
             if verbose:
-                print(f"  ✗ Storage error: {e}")
+                print(f"ERROR: Storage error - {e}")
             return False
         except Exception as e:
             self.logger.error(f"Error downloading book: {e}")
             if verbose:
-                print(f"  ✗ Error: {e}")
+                print(f"ERROR: {e}")
             return False
     
     def bulk_download(
@@ -403,39 +428,70 @@ class DownloadManager:
         Returns:
             List of download results with success/failure status
         """
+        # Print initial header
+        self._print_header("BULK DOWNLOAD SESSION")
+        print()
+        
         # Check download limits
         account_manager = AccountManager(self.config, self.auth_manager)
         can_download, limit_info = account_manager.check_download_limit(verbose=True)
         
         if not can_download:
             self.logger.error("Download limit reached.")
+            print("\nERROR: Download limit reached. Cannot proceed.")
             return []
         
         # Limit to remaining downloads
         downloads_remaining = limit_info.get('downloads_remaining', 0)
         if downloads_remaining > 0 and len(book_urls) > downloads_remaining:
             self.logger.info(f"Truncating to {downloads_remaining} books to respect daily limit.")
-            print(f"⚠ Limiting to {downloads_remaining} books to respect daily download limit.")
+            print(f"\nWARNING: Limiting to {downloads_remaining} books to respect daily limit.")
             book_urls = book_urls[:downloads_remaining]
         
         # Create index if needed
         if create_index:
             self.index_manager.create_download_index()
         
+        # Track overall progress
+        total_books = len(book_urls)
+        successful = 0
+        failed = 0
+        skipped = 0
+        
+        print(f"\nTotal books to process: {total_books}")
+        print()
+        
         # Download each book
         results = []
         for i, url in enumerate(book_urls, 1):
-            print(f"\n[{i}/{len(book_urls)}] Processing: {url}")
+            # Print progress header
+            self._print_separator('=')
+            print(f"Book {i} of {total_books}")
+            print(f"Status - Success: {successful} | Failed: {failed} | Skipped: {skipped}")
+            self._print_separator('=')
+            
+            # Show URL (truncated if too long)
+            max_url_len = self.terminal_width - 10
+            display_url = url if len(url) <= max_url_len else url[:max_url_len-3] + '...'
+            print(f"URL: {display_url}")
+            print()
             
             # Check if already downloaded
             book_id = extract_book_id_from_url(url)
             if book_id and self.index_manager.is_already_downloaded(book_id):
-                print(f"  ⊘ Skipped (already downloaded)")
+                print("SKIPPED: Already downloaded")
                 results.append({'url': url, 'status': 'skipped', 'reason': 'already_downloaded'})
+                skipped += 1
+                print()
                 continue
             
             # Download
             success = self.download_book(url, verbose=True, check_limits=False)
+            
+            if success:
+                successful += 1
+            else:
+                failed += 1
             
             results.append({
                 'url': url,
@@ -443,9 +499,20 @@ class DownloadManager:
                 'book_id': book_id
             })
             
+            print()
             # Small delay between downloads
             if i < len(book_urls):
                 time.sleep(1)
         
-        # Don't print summary here - let the caller handle it
+        # Print final summary
+        self._print_header("DOWNLOAD COMPLETE")
+        print()
+        print(f"Total Books:     {total_books}")
+        print(f"Successful:      {successful}")
+        print(f"Failed:          {failed}")
+        print(f"Skipped:         {skipped}")
+        print()
+        self._print_separator('=')
+        print()
+        
         return results
