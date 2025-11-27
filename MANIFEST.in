@@ -1,0 +1,12 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include src/zlibrary *.py
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude tests *
+recursive-exclude venv *
+recursive-exclude books *
+recursive-exclude data *
+recursive-exclude export *
+recursive-exclude logs *

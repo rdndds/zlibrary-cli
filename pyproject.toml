@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zlibrary-cli"
+version = "1.0.0"
+description = "Command-line tool for searching and downloading books from Z-Library"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "rdndds", email = "ardiandideyashidiq@gmail.com"}
+]
+keywords = ["zlibrary", "books", "download", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+
+dependencies = [
+    "requests>=2.25.1",
+    "beautifulsoup4>=4.9.3",
+    "colorlog>=6.7.0",
+]
+
+[project.scripts]
+zlibrary = "zlibrary.cli:main"
+zlib = "zlibrary.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/rdndds/zlibrary-cli"
+Repository = "https://github.com/rdndds/zlibrary-cli"
+Issues = "https://github.com/rdndds/zlibrary-cli/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["zlibrary*"]
+
+[tool.setuptools.package-data]
+zlibrary = ["py.typed"]
