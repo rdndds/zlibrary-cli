@@ -35,6 +35,8 @@ class CommandRouter:
             return self._handle_download(args)
         elif command == 'account':
             return self._handle_account(args)
+        elif command == 'login':
+            return self._handle_login(args)
         else:
             self.logger.error(f"Unknown command: {command}")
             return False
@@ -55,4 +57,10 @@ class CommandRouter:
         """Handle account command."""
         from zlibrary.commands.account import AccountCommandHandler
         handler = AccountCommandHandler(self.config)
+        return handler.handle(args)
+    
+    def _handle_login(self, args: Any) -> bool:
+        """Handle login command."""
+        from zlibrary.commands.login import LoginCommandHandler
+        handler = LoginCommandHandler(self.config)
         return handler.handle(args)

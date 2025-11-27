@@ -53,6 +53,8 @@ data/
 export/
 logs/
 *.log
+.env
+config.json
 
 # OS
 .DS_Store

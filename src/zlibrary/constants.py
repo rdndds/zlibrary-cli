@@ -26,6 +26,8 @@ RETRY_STATUS_CODES = [429, 500, 502, 503, 504]
 class ConfigKeys:
     """Configuration key constants to prevent typos"""
     COOKIES_FILE = 'cookies_file'
+    ZLIB_EMAIL = 'zlib_email'
+    ZLIB_PASSWORD = 'zlib_password'
     DOWNLOAD_DIR = 'download_dir'
     DOWNLOAD_INDEX_FILE = 'download_index_file'
     MAX_PAGES = 'max_pages'
@@ -47,6 +49,8 @@ class ConfigKeys:
 # Default Configuration Values
 DEFAULT_CONFIG = {
     ConfigKeys.COOKIES_FILE: 'data/cookies.txt',
+    ConfigKeys.ZLIB_EMAIL: None,
+    ConfigKeys.ZLIB_PASSWORD: None,
     ConfigKeys.DOWNLOAD_DIR: 'books',
     ConfigKeys.DOWNLOAD_INDEX_FILE: 'data/download_index.json',
     ConfigKeys.MAX_PAGES: 5,
@@ -70,6 +74,8 @@ DEFAULT_CONFIG = {
 ENV_VAR_PREFIX = 'ZLIB_'
 ENV_VAR_MAPPING = {
     f'{ENV_VAR_PREFIX}COOKIES_FILE': ConfigKeys.COOKIES_FILE,
+    f'{ENV_VAR_PREFIX}EMAIL': ConfigKeys.ZLIB_EMAIL,
+    f'{ENV_VAR_PREFIX}PASSWORD': ConfigKeys.ZLIB_PASSWORD,
     f'{ENV_VAR_PREFIX}DOWNLOAD_DIR': ConfigKeys.DOWNLOAD_DIR,
     f'{ENV_VAR_PREFIX}DOWNLOAD_INDEX_FILE': ConfigKeys.DOWNLOAD_INDEX_FILE,
     f'{ENV_VAR_PREFIX}MAX_PAGES': ConfigKeys.MAX_PAGES,

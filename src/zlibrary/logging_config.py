@@ -8,12 +8,6 @@ import os
 from typing import Optional
 from zlibrary.config import Config
 
-try:
-    import colorlog
-    COLORLOG_AVAILABLE = True
-except ImportError:
-    COLORLOG_AVAILABLE = False
-
 
 def setup_logging(config: Config) -> None:
     """
@@ -31,37 +25,19 @@ def setup_logging(config: Config) -> None:
     log_level = config.get('log_level', 'INFO')
     root_logger.setLevel(getattr(logging, log_level.upper()))
 
-    # Define formats
-    console_format = config.get('console_log_format', '%(log_color)s[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s%(reset)s')
+    # Define formats (no color)
+    console_format = config.get('console_log_format', '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s')
     file_format = config.get('file_log_format', '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s')
 
-    # Add console handler if enabled
+    # Add console handler if enabled (without colors)
     if config.get('log_to_console', True):
-        if COLORLOG_AVAILABLE:
-            # Use color formatter for console
-            color_formatter = colorlog.ColoredFormatter(
-                console_format,
-                datefmt='%Y-%m-%d %H:%M:%S',
-                log_colors={
-                    'DEBUG':    'cyan',
-                    'INFO':     'green',
-                    'WARNING':  'yellow',
-                    'ERROR':    'red',
-                    'CRITICAL': 'red,bg_white',
-                }
-            )
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(color_formatter)
-            root_logger.addHandler(console_handler)
-        else:
-            # Fallback to regular formatter if colorlog is not available
-            formatter = logging.Formatter(
-                console_format,
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            root_logger.addHandler(console_handler)
+        formatter = logging.Formatter(
+            console_format,
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
 
     # Add file handler with rotation if enabled
     if config.get('log_to_file', True):

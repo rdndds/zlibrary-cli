@@ -44,6 +44,32 @@ pipx install git+https://github.com/rdndds/zlibrary-cli.git
 
 ## Authentication
 
+You can authenticate with Z-Library in two ways:
+
+### Method 1: Login with Email & Password (Recommended)
+
+```bash
+# Login interactively (will prompt for credentials)
+python main.py login
+
+# Login with command-line arguments
+python main.py login --email your_email@example.com --password your_password
+
+# Use environment variables (recommended for automation)
+export ZLIB_EMAIL=your_email@example.com
+export ZLIB_PASSWORD=your_password
+python main.py login
+
+# Or use .env file
+cp .env.example .env
+# Edit .env with your credentials
+python main.py login
+```
+
+This will authenticate and save cookies to `data/cookies.txt` automatically.
+
+### Method 2: Manual Cookie File
+
 Get cookies from Z-Library in Netscape format and save to `data/cookies.txt`:
 
 ```
@@ -56,6 +82,19 @@ Get cookies from Z-Library in Netscape format and save to `data/cookies.txt`:
 
 ```bash
 python main.py [command] [options]
+```
+
+### Login
+
+```bash
+# Interactive login (prompts for email/password)
+python main.py login
+
+# Login with credentials
+python main.py login --email your@email.com --password yourpass
+
+# Save to custom location
+python main.py login --save-to /path/to/cookies.txt
 ```
 
 ### Search
@@ -93,10 +132,39 @@ python main.py account
 
 ## Configuration
 
-Create `config.json` in project root (optional):
+### Option 1: Environment Variables (.env file)
+
+Copy `.env.example` to `.env` and customize:
+
+```bash
+cp .env.example .env
+```
+
+Example `.env` file:
+
+```bash
+# Authentication
+ZLIB_EMAIL=your_email@example.com
+ZLIB_PASSWORD=your_password
+
+# Paths
+ZLIB_COOKIES_FILE=data/cookies.txt
+ZLIB_DOWNLOAD_DIR=books
+
+# Settings
+ZLIB_MAX_PAGES=5
+ZLIB_DEFAULT_SEARCH_LIMIT=10
+ZLIB_LOG_LEVEL=INFO
+```
+
+### Option 2: config.json
+
+Create `config.json` in project root:
 
 ```json
 {
+  "zlib_email": "your_email@example.com",
+  "zlib_password": "your_password",
   "cookies_file": "data/cookies.txt",
   "download_dir": "books",
   "max_pages": 5,
@@ -105,7 +173,17 @@ Create `config.json` in project root (optional):
 }
 ```
 
-Or use environment variables: `ZLIB_COOKIES_FILE`, `ZLIB_DOWNLOAD_DIR`, `ZLIB_LOG_LEVEL`, etc.
+### Option 3: Environment Variables (direct)
+
+```bash
+export ZLIB_EMAIL=your_email@example.com
+export ZLIB_PASSWORD=your_password
+export ZLIB_COOKIES_FILE=data/cookies.txt
+export ZLIB_DOWNLOAD_DIR=books
+export ZLIB_LOG_LEVEL=INFO
+```
+
+See `.env.example` for all available configuration options.
 
 ## Troubleshooting
 

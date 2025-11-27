@@ -30,6 +30,7 @@ def create_parser() -> argparse.ArgumentParser:
     _add_search_parser(subparsers)
     _add_download_parser(subparsers)
     _add_account_parser(subparsers)
+    _add_login_parser(subparsers)
     
     return parser
 
@@ -141,4 +142,28 @@ def _add_account_parser(subparsers):
         '--simple',
         action='store_true',
         help='Display only basic account information'
+    )
+
+
+def _add_login_parser(subparsers):
+    """Add login command parser."""
+    login_parser = subparsers.add_parser(
+        'login',
+        help='Login to Z-Library with email and password',
+        description='Login to Z-Library using email and password credentials. Saves cookies for future use.',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    login_parser.add_argument(
+        '--email',
+        help='Z-Library account email'
+    )
+    login_parser.add_argument(
+        '--password',
+        help='Z-Library account password'
+    )
+    login_parser.add_argument(
+        '--save-to',
+        default='data/cookies.txt',
+        help='Path to save cookies file (default: data/cookies.txt)'
     )

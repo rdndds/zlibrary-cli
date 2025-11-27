@@ -23,11 +23,32 @@ class Config:
             if key not in self.settings:
                 self.settings[key] = value
 
+        # Load .env file if exists
+        self._load_env_file()
+
         # Override with environment variables
         self._apply_environment_overrides()
         
         # Validate configuration
         self._validate_config()
+
+    def _load_env_file(self):
+        """Load environment variables from .env file if it exists."""
+        env_file = os.path.join(os.getcwd(), '.env')
+        if os.path.exists(env_file):
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            if '=' in line:
+                                key, value = line.split('=', 1)
+                                key = key.strip()
+                                value = value.strip().strip('"').strip("'")
+                                if key and not os.environ.get(key):
+                                    os.environ[key] = value
+            except Exception as e:
+                print(f"Warning: Error loading .env file: {e}")
 
     def _apply_environment_overrides(self):
         """Apply configuration overrides from environment variables."""
@@ -36,7 +57,10 @@ class Config:
             if env_value is not None:
                 # Convert string to appropriate type based on default value
                 default_value = self.defaults[config_key]
-                if isinstance(default_value, bool):
+                # Handle None defaults (like email/password)
+                if default_value is None:
+                    self.settings[config_key] = env_value
+                elif isinstance(default_value, bool):
                     # Convert string to boolean (case-insensitive)
                     self.settings[config_key] = env_value.lower() in ('true', '1', 'yes', 'on')
                 elif isinstance(default_value, int):
