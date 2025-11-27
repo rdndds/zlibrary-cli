@@ -74,7 +74,7 @@ DEFAULT_CONFIG = {
     ConfigKeys.RETRY_DELAY: DEFAULT_RETRY_DELAY,
     ConfigKeys.CHUNK_SIZE: DEFAULT_CHUNK_SIZE,
     ConfigKeys.MAX_WORKERS: DEFAULT_MAX_WORKERS,
-    ConfigKeys.LOG_LEVEL: 'INFO',
+    ConfigKeys.LOG_LEVEL: 'WARNING',
     ConfigKeys.LOG_FILE: 'logs/zlibrary.log',
     ConfigKeys.LOG_FORMAT: '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',
     ConfigKeys.CONSOLE_LOG_FORMAT: '[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s',

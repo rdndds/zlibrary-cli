@@ -379,7 +379,7 @@ class DownloadManager:
                     print("ERROR: Could not find download URL")
                 return False
             
-            self.logger.info(f"Downloading from: {download_url}")
+            self.logger.debug(f"Downloading from: {download_url}")
             self.logger.debug(f"Initiating streaming download")
             
             # Single streaming request (FIX: was downloading twice before!)
@@ -405,15 +405,13 @@ class DownloadManager:
             # Download file with progress
             filepath = os.path.join(download_dir, final_filename)
             
-            if verbose:
-                print(f"Downloading: {final_filename}")
+            print(f"Downloading: {final_filename}")
             
             # Download with real-time progress (response body not consumed yet)
             downloaded_size = self._download_with_progress(response, filepath, verbose)
             
+            print(f"SUCCESS: Saved as {os.path.basename(filepath)}")
             self.logger.info(f"Book downloaded successfully as: {filepath}")
-            if verbose:
-                print(f"SUCCESS: Saved as {os.path.basename(filepath)}")
 
             
             # Add to download index
