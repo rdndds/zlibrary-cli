@@ -53,6 +53,11 @@ def _add_search_parser(subparsers):
     )
     
     search_parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose output (DEBUG level logging)'
+    )
+    search_parser.add_argument(
         'query',
         nargs='?',
         help='Search query (keywords to search for)'
@@ -103,6 +108,11 @@ def _add_download_parser(subparsers):
     )
     
     download_parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose output (DEBUG level logging)'
+    )
+    download_parser.add_argument(
         'url',
         nargs='+',
         help='Z-Library book URL(s) to download'
@@ -146,6 +156,11 @@ def _add_account_parser(subparsers):
     )
     
     account_parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose output (DEBUG level logging)'
+    )
+    account_parser.add_argument(
         '--simple',
         action='store_true',
         help='Display only basic account information'
@@ -159,6 +174,12 @@ def _add_login_parser(subparsers):
         help='Login to Z-Library with email and password',
         description='Login to Z-Library using email and password credentials. Saves cookies for future use.',
         formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    login_parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Enable verbose output (DEBUG level logging)'
     )
     
     login_parser.add_argument(
